@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Naval Ballistics &amp; NBL Calculator</title>
+<style>
+  :root { --bg:#f4f6f8; --card:#fff; --line:#d5dbe1; --accent:#1f5f99; }
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, sans-serif; background: var(--bg); margin: 0; padding: 1rem; color: #1b2430; }
+  h1 { margin-top: 0; font-size: 1.4rem; }
+  h2 { font-size: 1.1rem; margin: 0 0 .5rem; }
+  .layout { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 1rem; align-items: start; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+  .layer { border: 1px solid var(--line); border-radius: 6px; padding: .6rem; margin-bottom: .6rem; background: #fafbfc; }
+  .row { display: flex; flex-wrap: wrap; gap: .5rem; align-items: end; margin-bottom: .4rem; }
+  label { display: flex; flex-direction: column; font-size: .75rem; color: #53606e; gap: 2px; }
+  input, select { padding: .3rem .4rem; border: 1px solid var(--line); border-radius: 4px; font-size: .9rem; }
+  input[type=number] { width: 7.5rem; }
+  select { max-width: 15rem; }
+  button { cursor: pointer; border: 1px solid var(--accent); background: #fff; color: var(--accent); border-radius: 4px; padding: .3rem .6rem; }
+  button.primary { background: var(--accent); color: #fff; font-size: 1rem; padding: .5rem 1.2rem; }
+  button.danger { border-color: #b3261e; color: #b3261e; }
+  .plates { margin-left: .5rem; padding-left: .6rem; border-left: 3px solid var(--line); }
+  .sub { font-size: .8rem; font-weight: 600; margin: .3rem 0; color: #53606e; }
+  pre { background: #10161d; color: #d7e2ec; padding: 1rem; border-radius: 6px; overflow: auto; white-space: pre-wrap; margin: 0; min-height: 12rem; }
+  .held { color: #6fd08c; } .defeated { color: #ff8a80; }
+</style>
+</head>
+<body>
+<h1>Naval Ballistics &amp; NBL Calculator</h1>
+<div class="layout">
+  <div>
+    <section>
+      <h2>Shell &amp; range</h2>
+      <div class="row">
+        <label>Projectile <select id="projectile"></select></label>
+        <label>Target range (yards) <input type="number" id="range" step="any" min="0"></label>
+      </div>
+    </section>
+    <section>
+      <h2>Deck armor layers</h2>
+      <div id="deck"></div>
+      <button type="button" id="addDeck">+ Add deck layer</button>
+    </section>
+    <section>
+      <h2>Side armor</h2>
+      <div class="sub">Outer hull</div>
+      <div id="hull"></div>
+      <div class="sub">Splinter bulkheads</div>
+      <div id="bulkheads"></div>
+      <button type="button" id="addBulkhead">+ Add bulkhead</button>
+      <div class="sub" style="margin-top:.8rem">Main belt (face-hardened)</div>
+      <div id="belt"></div>
+    </section>
+    <button type="button" class="primary" id="run">Calculate</button>
+    <button type="button" id="reset">Reset to defaults</button>
+  </div>
+  <section>
+    <h2>Report</h2>
+    <pre id="report">Press “Calculate”.</pre>
+  </section>
+</div>
+
+<script src="facehard.js"></script>
+<script>
+(function () {
+  const F = Facehard;
+  const $ = (id) => document.getElementById(id);
+
+  const options = (lib, selected) => Object.keys(lib)
+    .map((k) => `<option value="${k}"${Number(k) === selected ? " selected" : ""}>${k} – ${lib[k].name.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</option>`)
+    .join("");
+  const slopeOptions = (sel) => ["normal", "reverse", "deck"]
+    .map((s) => `<option value="${s}"${s === sel ? " selected" : ""}>${s}</option>`).join("");
+
+  function plateRow(plate) {
+    const el = document.createElement("div");
+    el.className = "row plate";
+    el.innerHTML = `
+      <label>Plate <select class="p-id">${options(F.HomogeneousLibrary, plate.id)}</select></label>
+      <label>Thickness (in) <input type="number" class="p-t" step="any" min="0" value="${plate.thickness}"></label>
+      <button type="button" class="danger rm">✕</button>`;
+    el.querySelector(".rm").onclick = () => el.remove();
+    return el;
+  }
+
+  function platesEditor(title, plates) {
+    const wrap = document.createElement("div");
+    wrap.className = "plates";
+    wrap.innerHTML = `<div class="sub">${title}</div><div class="list"></div><button type="button" class="add">+ Add plate</button>`;
+    const list = wrap.querySelector(".list");
+    plates.forEach((p) => list.appendChild(plateRow(p)));
+    wrap.querySelector(".add").onclick = () => list.appendChild(plateRow({ id: 4, thickness: 1 }));
+    wrap.read = () => [...list.querySelectorAll(".plate")].map((r) => ({
+      id: Number(r.querySelector(".p-id").value),
+      thickness: Number(r.querySelector(".p-t").value) || 0,
+    }));
+    return wrap;
+  }
+
+  // allowKindChoice: homogeneous or face-hardened; otherwise face-hardened only
+  function layerEditor(layer, { removable, allowKindChoice }) {
+    const el = document.createElement("div");
+    el.className = "layer";
+    const isFH = layer.kind === "faceHardened";
+    el.innerHTML = `
+      <div class="row">
+        ${allowKindChoice ? `<label>Type <select class="kind">
+          <option value="homogeneous"${isFH ? "" : " selected"}>Homogeneous</option>
+          <option value="faceHardened"${isFH ? " selected" : ""}>Face-hardened</option></select></label>` : ""}
+        <label>Slope type <select class="slope">${slopeOptions(layer.slopeType)}</select></label>
+        <label>Slope angle (°) <input type="number" class="angle" step="any" value="${layer.slopeAngle}"></label>
+        ${removable ? `<button type="button" class="danger rm">Remove layer</button>` : ""}
+      </div>
+      <div class="body"></div>`;
+    const body = el.querySelector(".body");
+    let homPlates, fhBacking, fhFields;
+
+    const lastFH = isFH ? layer : null;
+    function build(kind) {
+      body.innerHTML = "";
+      if (kind === "homogeneous") {
+        homPlates = platesEditor("Plates", layer.plates || [{ id: 4, thickness: 1 }]);
+        body.appendChild(homPlates);
+      } else {
+        const d = lastFH || { faceHardenedID: 24, thickness: 10, backingPlates: [], woodThickness: 0, cementThickness: 0 };
+        fhFields = document.createElement("div");
+        fhFields.className = "row";
+        fhFields.innerHTML = `
+          <label>Face-hardened armor <select class="fh-id">${options(F.FacehardLibrary, d.faceHardenedID)}</select></label>
+          <label>Thickness (in) <input type="number" class="fh-t" step="any" min="0" value="${d.thickness}"></label>
+          <label>Wood <input type="number" class="fh-wood" step="any" min="0" value="${d.woodThickness}"></label>
+          <label>Cement (in) <input type="number" class="fh-cem" step="any" min="0" value="${d.cementThickness}"></label>`;
+        fhBacking = platesEditor("Backing plates", d.backingPlates);
+        body.append(fhFields, fhBacking);
+      }
+    }
+    build(isFH ? "faceHardened" : "homogeneous");
+    const kindSel = el.querySelector(".kind");
+    if (kindSel) kindSel.onchange = () => build(kindSel.value);
+    const rm = el.querySelector(".rm");
+    if (rm) rm.onclick = () => el.remove();
+
+    el.read = () => {
+      const kind = kindSel ? kindSel.value : "faceHardened";
+      const common = {
+        slopeType: el.querySelector(".slope").value,
+        slopeAngle: Number(el.querySelector(".angle").value) || 0,
+      };
+      if (kind === "homogeneous") return { kind, plates: homPlates.read(), ...common };
+      const num = (c) => Number(fhFields.querySelector(c).value) || 0;
+      return {
+        kind, ...common,
+        faceHardenedID: Number(fhFields.querySelector(".fh-id").value),
+        thickness: num(".fh-t"),
+        woodThickness: num(".fh-wood"),
+        cementThickness: num(".fh-cem"),
+        backingPlates: fhBacking.read(),
+      };
+    };
+    return el;
+  }
+
+  function fill(containerId, layers, opts) {
+    const c = $(containerId);
+    c.innerHTML = "";
+    layers.forEach((l) => c.appendChild(layerEditor(l, opts)));
+  }
+  const readAll = (containerId) => [...$(containerId).children].map((e) => e.read());
+
+  function load(s) {
+    $("projectile").innerHTML = options(F.ProjectileLibrary, s.projectileID);
+    $("range").value = s.rangeYards;
+    fill("deck", s.deckArray, { removable: true, allowKindChoice: true });
+    fill("hull", [s.sideOuterHull], { removable: false, allowKindChoice: true });
+    fill("bulkheads", s.sideBulkheads, { removable: true, allowKindChoice: true });
+    fill("belt", [s.sideMainBelt], { removable: false, allowKindChoice: false });
+  }
+
+  const newHom = (slopeType, slopeAngle) => ({ kind: "homogeneous", plates: [{ id: 4, thickness: 1 }], slopeType, slopeAngle });
+
+  $("addDeck").onclick = () => $("deck").appendChild(layerEditor(newHom("deck", 90), { removable: true, allowKindChoice: true }));
+  $("addBulkhead").onclick = () => $("bulkheads").appendChild(layerEditor(newHom("normal", 0), { removable: true, allowKindChoice: true }));
+  $("reset").onclick = () => { load(F.defaultScenario()); $("report").textContent = "Press “Calculate”."; };
+
+  $("run").onclick = () => {
+    const lines = F.runNavalBallisticLimitCalculator({
+      projectileID: Number($("projectile").value),
+      rangeYards: Number($("range").value) || 0,
+      deckArray: readAll("deck"),
+      sideOuterHull: readAll("hull")[0],
+      sideBulkheads: readAll("bulkheads"),
+      sideMainBelt: readAll("belt")[0],
+    });
+    const report = $("report");
+    report.textContent = "";
+    lines.forEach((line) => {
+      const span = document.createElement("span");
+      if (line.startsWith("RESULT:")) span.className = line.includes("HELD") ? "held" : "defeated";
+      span.textContent = line + "\n";
+      report.appendChild(span);
+    });
+  };
+
+  load(F.defaultScenario());
+})();
+</script>
+</body>
+</html>
