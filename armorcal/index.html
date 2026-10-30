@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tank Armor Effectiveness Calculator</title>
+<style>
+  :root { --bg:#f4f6f8; --card:#fff; --line:#d5dbe1; --accent:#1f5f99; }
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, sans-serif; background: var(--bg); margin: 0; padding: 1rem; color: #1b2430; }
+  h1 { margin-top: 0; font-size: 1.4rem; }
+  h2 { font-size: 1.1rem; margin: 0 0 .5rem; }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+  .layout { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 1rem; align-items: start; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+  .row { display: flex; flex-wrap: wrap; gap: .6rem; align-items: end; margin-bottom: .5rem; }
+  label { display: flex; flex-direction: column; font-size: .75rem; color: #53606e; gap: 2px; }
+  input, select { padding: .3rem .4rem; border: 1px solid var(--line); border-radius: 4px; font-size: .9rem; }
+  input[type=number] { width: 6.5rem; }
+  select.wide { min-width: 18rem; max-width: 100%; }
+  button { cursor: pointer; border: 1px solid var(--accent); background: #fff; color: var(--accent); border-radius: 4px; padding: .3rem .7rem; }
+  button.primary { background: var(--accent); color: #fff; font-size: 1rem; padding: .5rem 1.2rem; }
+  button.danger { border-color: #b3261e; color: #b3261e; }
+  .plate { border: 1px solid var(--line); border-radius: 6px; padding: .5rem; margin-bottom: .5rem; background: #fafbfc; }
+  .sub { font-size: .8rem; font-weight: 600; color: #53606e; margin: .3rem 0; }
+  pre { background: #10161d; color: #d7e2ec; padding: 1rem; border-radius: 6px; margin: 0; white-space: pre-wrap; min-height: 6rem; }
+  .big { font-size: 1.8rem; font-weight: 700; margin: .3rem 0; }
+  .err { color: #b3261e; font-weight: 600; }
+  table { border-collapse: collapse; width: 100%; font-size: .85rem; }
+  th, td { border-bottom: 1px solid var(--line); padding: .3rem .5rem; text-align: right; }
+  th:first-child, td:first-child { text-align: left; }
+  th { background: #eef2f6; position: sticky; top: 0; cursor: pointer; }
+  .scroll { max-height: 26rem; overflow: auto; border: 1px solid var(--line); }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<h1>Tank Armor Effectiveness Calculator</h1>
+
+<div class="layout">
+  <div>
+    <section>
+      <h2>Load a tank preset (optional)</h2>
+      <div class="row">
+        <label>Filter <input type="search" id="presetFilter" placeholder="e.g. Sherman"></label>
+        <label>Preset <select id="preset" class="wide"></select></label>
+        <button type="button" id="loadPreset">Load into form</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Armor</h2>
+      <div class="row">
+        <label>Arrangement
+          <select id="arrangement">
+            <option>Single Plate</option>
+            <option>Laminated</option>
+            <option>Triple Laminated</option>
+            <option>Spaced</option>
+          </select>
+        </label>
+        <button type="button" id="addPlate">+ Add plate</button>
+      </div>
+      <div id="plates"></div>
+    </section>
+
+    <section>
+      <h2>Attacking shell</h2>
+      <div class="row">
+        <label>Shell type
+          <select id="shellType">
+            <option value="ap">AP</option><option value="apc">APC</option><option value="apbc">APBC</option>
+            <option value="apcbc" selected>APCBC</option><option value="apcr">APCR</option><option value="apds">APDS</option>
+          </select>
+        </label>
+        <label>Diameter (mm) <input type="number" id="shellDiameter" value="75" step="any" min="0"></label>
+        <label id="coreWrap">Core diameter (mm) <input type="number" id="coreDiameter" value="" step="any" min="0"></label>
+        <label id="capWrap">Cap type
+          <select id="capType"><option value="type1">Type 1</option><option value="type2">Type 2</option></select>
+        </label>
+        <label id="genWrap">APDS generation
+          <select id="apdsGen"><option value="gen1">Gen 1</option><option value="gen2">Gen 2</option><option value="gen3">Gen 3</option></select>
+        </label>
+      </div>
+    </section>
+
+    <button type="button" class="primary" id="run">Calculate</button>
+  </div>
+
+  <section>
+    <h2>Result</h2>
+    <div id="big" class="big"></div>
+    <pre id="report">Press “Calculate”.</pre>
+  </section>
+</div>
+
+<section>
+  <h2>All presets</h2>
+  <div class="row">
+    <span>Runs every preset with its own shell, as in the original tests.</span>
+    <button type="button" id="runAll">Run all presets</button>
+    <label>Filter <input type="search" id="resultFilter" placeholder="type to filter…"></label>
+  </div>
+  <div class="scroll"><table id="results"></table></div>
+</section>
+
+<script src="armor-data.js"></script>
+<script src="armorcalc.js"></script>
+<script>
+(function () {
+  const C = ArmorCalc;
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const MAX_PLATES = 6;
+
+  const opts = (list, sel) => list.map(([v, l]) => `<option value="${v}"${v === sel ? " selected" : ""}>${l}</option>`).join("");
+  const TYPES = [["rha", "RHA (rolled)"], ["cha", "CHA (cast)"], ["fha", "FHA (face-hardened)"]];
+  const FLAWS = [["noFlaws", "No flaws"], ["small", "Small"], ["medium", "Medium"], ["large", "Large"]];
+  const EDGES = [["none", "None"], ["small", "Small"], ["medium", "Medium"], ["large", "Large"]];
+
+  const defaultPlate = () => ({ type: "rha", thickness: 25.4, hardness: 260, v: 0, l: 0, flaw: "noFlaws", edge: "none" });
+
+  function addPlate(p = defaultPlate()) {
+    const list = $("plates");
+    if (list.children.length >= MAX_PLATES) return;
+    const el = document.createElement("div");
+    el.className = "plate";
+    el.innerHTML = `
+      <div class="sub"></div>
+      <div class="row">
+        <label>Type <select class="type">${opts(TYPES, p.type)}</select></label>
+        <label>Thickness (mm) <input type="number" class="thickness" step="any" min="0" value="${p.thickness}"></label>
+        <label>Hardness (BHN) <input type="number" class="hardness" step="any" min="0" value="${p.hardness}"></label>
+        <label>Vertical angle (°) <input type="number" class="v" step="any" value="${p.v}"></label>
+        <label>Lateral angle (°) <input type="number" class="l" step="any" value="${p.l}"></label>
+        <label>Flaws <select class="flaw">${opts(FLAWS, p.flaw)}</select></label>
+        <label>Free edge <select class="edge">${opts(EDGES, p.edge)}</select></label>
+        <button type="button" class="danger rm">Remove</button>
+      </div>`;
+    el.querySelector(".rm").onclick = () => { el.remove(); renumber(); };
+    list.appendChild(el);
+    renumber();
+  }
+
+  function renumber() {
+    [...$("plates").children].forEach((el, i) => { el.querySelector(".sub").textContent = `Plate ${i + 1}${i === 0 ? " (front)" : ""}`; });
+    $("addPlate").disabled = $("plates").children.length >= MAX_PLATES;
+  }
+
+  function toggleShellFields() {
+    const t = $("shellType").value;
+    $("coreWrap").classList.toggle("hidden", !(t === "apcr" || t === "apds"));
+    $("capWrap").classList.toggle("hidden", !(t === "apc" || t === "apcbc"));
+    $("genWrap").classList.toggle("hidden", t !== "apds");
+  }
+
+  // Builds the same argument object the original Swift function took
+  function readForm() {
+    const args = { arrangementName: $("arrangement").value };
+    [...$("plates").children].forEach((el, i) => {
+      const n = i + 1;
+      args[`p${n}Type`] = el.querySelector(".type").value;
+      args[`p${n}Thickness`] = Number(el.querySelector(".thickness").value) || 0;
+      args[`p${n}Hardness`] = Number(el.querySelector(".hardness").value) || 0;
+      args[`p${n}Vangle`] = Number(el.querySelector(".v").value) || 0;
+      args[`p${n}Langle`] = Number(el.querySelector(".l").value) || 0;
+      args[`p${n}Flaw`] = el.querySelector(".flaw").value;
+      args[`p${n}Edge`] = el.querySelector(".edge").value;
+    });
+    const t = $("shellType").value;
+    args.shellType = t;
+    args.shellDiameter = Number($("shellDiameter").value) || 0;
+    if (t === "apcr" || t === "apds") {
+      const core = $("coreDiameter").value;
+      if (core !== "") args.coreDiameter = Number(core);
+    }
+    if (t === "apc" || t === "apcbc") args.capType = $("capType").value;
+    if (t === "apds") args.apdsGen = $("apdsGen").value;
+    return args;
+  }
+
+  function loadArgs(a) {
+    $("arrangement").value = a.arrangementName;
+    $("plates").innerHTML = "";
+    for (let i = 1; i <= MAX_PLATES; i++) {
+      if (a[`p${i}Type`] == null) continue;
+      addPlate({
+        type: a[`p${i}Type`], thickness: a[`p${i}Thickness`], hardness: a[`p${i}Hardness`],
+        v: a[`p${i}Vangle`], l: a[`p${i}Langle`], flaw: a[`p${i}Flaw`], edge: a[`p${i}Edge`] || "none",
+      });
+    }
+    $("shellType").value = a.shellType;
+    $("shellDiameter").value = a.shellDiameter;
+    $("coreDiameter").value = a.coreDiameter ?? "";
+    if (a.capType) $("capType").value = a.capType;
+    if (a.apdsGen) $("apdsGen").value = a.apdsGen;
+    toggleShellFields();
+  }
+
+  function run() {
+    const r = C.evaluateArmorHit(readForm());
+    if (r.error) {
+      $("big").innerHTML = `<span class="err">${esc(r.error)}</span>`;
+      $("report").textContent = r.error === "Invalid arrangement."
+        ? "The number of plates doesn't match the arrangement (Single: 1, Laminated: 2, Triple Laminated: 3, Spaced: 2 or more)."
+        : r.error;
+      return;
+    }
+    $("big").textContent = Number.isFinite(r.result) ? `${r.result.toFixed(0)} mm` : String(r.result);
+    $("report").textContent = r.report;
+  }
+
+  // Presets
+  const presetLabel = (p, i) => `${i + 1}. ${p.title} [${p.args.arrangementName}]`;
+  function fillPresets() {
+    const f = $("presetFilter").value.trim().toLowerCase();
+    $("preset").innerHTML = C.presets.map((p, i) => [p, i])
+      .filter(([p, i]) => presetLabel(p, i).toLowerCase().includes(f))
+      .map(([p, i]) => `<option value="${i}">${esc(presetLabel(p, i))}</option>`).join("");
+  }
+
+  let rows = [];
+  let sortKey = "i", sortDir = 1;
+  function renderResults() {
+    const f = $("resultFilter").value.trim().toLowerCase();
+    const shown = rows.filter((r) => r.title.toLowerCase().includes(f))
+      .sort((a, b) => (a[sortKey] > b[sortKey] ? 1 : a[sortKey] < b[sortKey] ? -1 : 0) * sortDir);
+    const cols = [["i", "#"], ["title", "Tank / location"], ["arrangement", "Arrangement"], ["shell", "Shell"], ["result", "Effective thickness (mm)"]];
+    $("results").innerHTML = `<tr>${cols.map(([k, l]) => `<th data-k="${k}">${l}${k === sortKey ? (sortDir > 0 ? " ▲" : " ▼") : ""}</th>`).join("")}</tr>` +
+      shown.map((r) => `<tr><td>${r.i}</td><td style="text-align:left">${esc(r.title)}</td><td>${esc(r.arrangement)}</td><td>${esc(r.shell)}</td><td>${r.error ? esc(r.error) : Number.isFinite(r.result) ? r.result.toFixed(0) : r.result}</td></tr>`).join("");
+    $("results").querySelectorAll("th").forEach((th) => th.onclick = () => {
+      sortDir = th.dataset.k === sortKey ? -sortDir : 1;
+      sortKey = th.dataset.k;
+      renderResults();
+    });
+  }
+
+  function runAll() {
+    rows = C.presets.map((p, i) => {
+      const r = C.evaluateArmorHit(p.args);
+      return { i: i + 1, title: p.title, arrangement: p.args.arrangementName, shell: `${p.args.shellDiameter}mm ${p.args.shellType.toUpperCase()}`, result: r.result, error: r.error };
+    });
+    renderResults();
+  }
+
+  $("addPlate").onclick = () => addPlate();
+  $("shellType").onchange = toggleShellFields;
+  $("run").onclick = run;
+  $("runAll").onclick = runAll;
+  $("presetFilter").oninput = fillPresets;
+  $("resultFilter").oninput = renderResults;
+  $("loadPreset").onclick = () => {
+    const p = C.presets[Number($("preset").value)];
+    if (p) { loadArgs(p.args); run(); }
+  };
+
+  fillPresets();
+  loadArgs(C.presets[0].args);
+  run();
+})();
+</script>
+</body>
+</html>
