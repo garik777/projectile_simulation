@@ -1,1 +1,158 @@
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>APFSDS vs Armor Protection Calculator</title>
+<style>
+  :root { --bg:#f4f6f8; --card:#fff; --line:#d5dbe1; --accent:#1f5f99; }
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, sans-serif; background: var(--bg); margin: 0; padding: 1rem; color: #1b2430; }
+  h1 { margin-top: 0; font-size: 1.4rem; }
+  h2 { font-size: 1.1rem; margin: 0 0 .5rem; }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+  .row { display: flex; flex-wrap: wrap; gap: .75rem; align-items: end; margin-bottom: .5rem; }
+  label { display: flex; flex-direction: column; font-size: .75rem; color: #53606e; gap: 2px; }
+  input, select { padding: .35rem .45rem; border: 1px solid var(--line); border-radius: 4px; font-size: .9rem; }
+  select { min-width: 16rem; max-width: 100%; }
+  input[type=number] { width: 7rem; }
+  button { cursor: pointer; border: 1px solid var(--accent); background: var(--accent); color: #fff; border-radius: 4px; padding: .45rem 1rem; font-size: .95rem; }
+  pre { background: #10161d; color: #d7e2ec; padding: 1rem; border-radius: 6px; overflow: auto; margin: 0; white-space: pre-wrap; }
+  .badge { display: inline-block; padding: .1rem .5rem; border-radius: 10px; font-weight: 600; font-size: .8rem; color: #fff; }
+  .full { background: #c62828; } .partial { background: #ef8f00; } .none { background: #2e7d32; }
+  table { border-collapse: collapse; width: 100%; font-size: .85rem; }
+  th, td { border-bottom: 1px solid var(--line); padding: .3rem .5rem; text-align: right; }
+  th:first-child, td:first-child { text-align: left; }
+  th { background: #eef2f6; position: sticky; top: 0; cursor: pointer; }
+  .scroll { max-height: 26rem; overflow: auto; border: 1px solid var(--line); }
+  .meta { font-size: .85rem; color: #53606e; margin: .25rem 0 .5rem; }
+</style>
+</head>
+<body>
+<h1>APFSDS vs Armor Protection Calculator</h1>
+
+<div class="layout">
+  <section>
+    <h2>Single test</h2>
+    <div class="row">
+      <label>Filter armors <input type="search" id="armorFilter" placeholder="type to filter…"></label>
+      <label>Armor array <select id="armor"></select></label>
+    </div>
+    <div class="row">
+      <label>Filter rounds <input type="search" id="shellFilter" placeholder="type to filter…"></label>
+      <label>APFSDS round <select id="shell"></select></label>
+    </div>
+    <div class="row">
+      <label>Distance (km) <input type="number" id="distance" value="2" step="any" min="0"></label>
+      <button type="button" id="run">Calculate</button>
+    </div>
+    <div id="verdict" class="meta"></div>
+    <pre id="report">Press “Calculate”.</pre>
+  </section>
+
+  <section>
+    <h2>Selected armor</h2>
+    <div class="meta" id="armorMeta"></div>
+    <div class="scroll"><table id="plates"></table></div>
+  </section>
+</div>
+
+<section>
+  <h2>Selected round vs every armor</h2>
+  <div class="row">
+    <button type="button" id="runAll">Test all armors with selected round &amp; distance</button>
+    <label>Filter results <input type="search" id="resultFilter" placeholder="type to filter…"></label>
+  </div>
+  <div class="scroll"><table id="results"></table></div>
+</section>
+
+<script src="apfsds-data.js"></script>
+<script src="apfsds.js"></script>
+<script>
+(function () {
+  const A = Apfsds;
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const num = (n, d = 0) => (Number.isFinite(n) ? n.toFixed(d) : String(n));
+  const badgeClass = (status) => status === "full penetration" ? "full" : status === "partial penetration" ? "partial" : "none";
+
+  const armorNames = Object.keys(A.armorRegistry).sort((a, b) => a.localeCompare(b));
+  const shellNames = Object.keys(A.apfsdsRegistry).sort((a, b) => a.localeCompare(b));
+
+  function fillSelect(select, names, filter) {
+    const f = filter.trim().toLowerCase();
+    const prev = select.value;
+    const shown = names.filter((n) => n.toLowerCase().includes(f));
+    select.innerHTML = shown.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
+    if (shown.includes(prev)) select.value = prev;
+  }
+
+  function showArmor() {
+    const armor = A.armorRegistry[$("armor").value];
+    const table = $("plates");
+    if (!armor) { table.innerHTML = ""; $("armorMeta").textContent = ""; return; }
+    const era = armor.eraType ? A.ERA_TYPES[armor.eraType] : null;
+    $("armorMeta").textContent = `${armor.plates.length} plate(s), ${armor.airGaps.length} air gap value(s)` +
+      (era ? `, ERA: ${era.label} (modifier ${era.modifier})` : "");
+    const rows = armor.plates.map((p, i) => `<tr>
+      <td>${i + 1}. ${esc(p.type)}</td><td>${num(p.physicalThickness, 2)}</td><td>${num(p.thickness, 2)}</td>
+      <td>${num(p.hardnessBHN)}</td><td>${num(p.VangleAngle, 1)}</td><td>${num(p.LangleAngle, 1)}</td>
+      <td>${i < armor.airGaps.length ? num(armor.airGaps[i], 2) : ""}</td></tr>`).join("");
+    table.innerHTML = `<tr><th>Plate</th><th>Thickness (mm)</th><th>Effective (mm)</th><th>BHN</th><th>V angle</th><th>L angle</th><th>Air gap (mm)</th></tr>${rows}`;
+  }
+
+  function run() {
+    const r = A.testArmorProtection($("armor").value, $("shell").value, Number($("distance").value) || 0);
+    $("report").textContent = A.formatReport(r);
+    $("verdict").innerHTML = r.error ? "" : `<span class="badge ${badgeClass(r.status)}">${esc(r.status.toUpperCase())}</span>`;
+  }
+
+  let allRows = [];
+  let sortKey = "armorName", sortDir = 1;
+
+  function renderResults() {
+    const f = $("resultFilter").value.trim().toLowerCase();
+    const rows = allRows.filter((r) => r.armorName.toLowerCase().includes(f))
+      .sort((a, b) => (a[sortKey] > b[sortKey] ? 1 : a[sortKey] < b[sortKey] ? -1 : 0) * sortDir);
+    const head = [["armorName", "Armor"], ["effectiveProtection", "Protection (mm)"], ["calculatedPen", "Penetration (mm)"], ["margin", "Margin (mm)"], ["status", "Result"]]
+      .map(([k, label]) => `<th data-k="${k}">${label}${k === sortKey ? (sortDir > 0 ? " ▲" : " ▼") : ""}</th>`).join("");
+    $("results").innerHTML = `<tr>${head}</tr>` + rows.map((r) => `<tr>
+      <td>${esc(r.armorName)}</td><td>${num(r.effectiveProtection)}</td><td>${num(r.calculatedPen)}</td>
+      <td>${num(r.margin)}</td><td><span class="badge ${badgeClass(r.status)}">${esc(r.status)}</span></td></tr>`).join("");
+    $("results").querySelectorAll("th").forEach((th) => th.onclick = () => {
+      const k = th.dataset.k;
+      sortDir = k === sortKey ? -sortDir : 1;
+      sortKey = k;
+      renderResults();
+    });
+  }
+
+  function runAll() {
+    const shell = $("shell").value, d = Number($("distance").value) || 0;
+    allRows = armorNames.map((n) => {
+      const r = A.testArmorProtection(n, shell, d);
+      return Object.assign(r, { margin: r.effectiveProtection - r.calculatedPen });
+    });
+    renderResults();
+  }
+
+  $("armorFilter").oninput = () => { fillSelect($("armor"), armorNames, $("armorFilter").value); showArmor(); };
+  $("shellFilter").oninput = () => fillSelect($("shell"), shellNames, $("shellFilter").value);
+  $("armor").onchange = showArmor;
+  $("run").onclick = run;
+  $("runAll").onclick = runAll;
+  $("resultFilter").oninput = renderResults;
+
+  fillSelect($("armor"), armorNames, "");
+  fillSelect($("shell"), shellNames, "");
+  // Defaults from the Swift sample tests
+  if (armorNames.includes("Arjun Mk. 1 Turret Front")) $("armor").value = "Arjun Mk. 1 Turret Front";
+  if (shellNames.includes("OFL-120-F1")) $("shell").value = "OFL-120-F1";
+  showArmor();
+})();
+</script>
+</body>
+</html>
