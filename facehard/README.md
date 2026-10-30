@@ -29,6 +29,14 @@ The report lists how thick each layer is in "effective" terms, the total for the
 | `index.html` | The web page you open and interact with. |
 | `facehard.js` | The calculations: the shell's flight, the armor's resistance, and the final result. It also holds the lists of shells and armor types. |
 
+## References
+
+- **Navy ballistic limit**: the speed at which a shell just gets through a plate.
+- **Jurens** (in the gravity calculation) and **USN** (in the air-density calculation), and a **G8 drag curve** for the shell's flight.
+- Armor names such as **Harvey**, **Krupp Cemented (KC)**, **Gruson**, **Terni** and **Witkowitz**, which are historical armor makers or processes.
+
+From general knowledge (not from the code, so please verify), this style of calculation is common in public writing on historical naval ballistics, such as the NavWeaps website and articles by Nathan Okun and William Jurens.
+
 ## Good to know
 
 - The data and formulas were converted directly from the original Swift code.
