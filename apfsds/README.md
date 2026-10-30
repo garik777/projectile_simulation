@@ -34,6 +34,11 @@ Open `index.html` in any web browser, pick an armor and a round, enter a distanc
 | `apfsds.js` | The calculations: how far a round penetrates, how much protection the armor gives, and the final verdict. |
 | `apfsds-data.js` | The library of armors and rounds. It's a large file, but it is only a list of figures. |
 
+## References
+
+- W. Lanz and W. Odermatt, *Penetration Limits of Conventional Large Caliber Anti Tank Guns / Kinetic Energy Projectiles*, 13th International Symposium on Ballistics, Stockholm, 1992.
+
+
 ## Good to know
 
 - The data and formulas were converted directly from the original Swift code.
