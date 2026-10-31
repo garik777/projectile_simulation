@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Armor &amp; Ballistics Calculators</title>
+<style>
+  :root { --bg:#f4f6f8; --card:#fff; --line:#d5dbe1; --accent:#1f5f99; --text:#1b2430; --muted:#53606e; }
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; }
+  header { background: #10161d; color: #fff; padding: 2.5rem 1rem; text-align: center; }
+  header h1 { margin: 0 0 .5rem; font-size: 1.9rem; }
+  header p { margin: 0 auto; max-width: 40rem; color: #b8c4d0; }
+  main { max-width: 64rem; margin: 0 auto; padding: 1.5rem 1rem; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1rem; }
+  .card { display: flex; flex-direction: column; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 1.25rem; text-decoration: none; color: inherit; transition: box-shadow .15s, transform .15s; }
+  .card:hover, .card:focus-visible { box-shadow: 0 6px 18px rgba(0, 0, 0, .12); transform: translateY(-2px); outline: none; }
+  .tag { font-size: .75rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--accent); }
+  .card h2 { margin: .3rem 0 .5rem; font-size: 1.2rem; }
+  .card p { margin: 0 0 1rem; color: var(--muted); flex: 1; }
+  .open { color: var(--accent); font-weight: 600; }
+  .links { margin-top: .5rem; font-size: .8rem; }
+  .links a { color: var(--muted); }
+  footer { max-width: 64rem; margin: 0 auto; padding: 0 1rem 2rem; color: var(--muted); font-size: .85rem; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Armor &amp; Ballistics Calculators</h1>
+  <p>Three browser-based calculators that estimate how well armor stands up to different shells. Pick one to get started.</p>
+</header>
+
+<main>
+  <div class="cards">
+    <div>
+      <a class="card" href="apfsds/index.html">
+        <span class="tag">Modern tanks</span>
+        <h2>APFSDS vs Armor</h2>
+        <p>Can a modern tank round get through a given piece of armor? Choose an armor and a round, set a distance, and see the verdict.</p>
+        <span class="open">Open calculator →</span>
+      </a>
+      <div class="links"><a href="apfsds/README.md">About this calculator</a></div>
+    </div>
+
+    <div>
+      <a class="card" href="armorcalc/index.html">
+        <span class="tag">1930s – 1970s tanks</span>
+        <h2>Tank Armor Effectiveness</h2>
+        <p>How well does a tank's steel armor resist a given shell? Build your own armor or load one of about 180 historical tanks.</p>
+        <span class="open">Open calculator →</span>
+      </a>
+      <div class="links"><a href="armorcalc/README.md">About this calculator</a></div>
+    </div>
+
+    <div>
+      <a class="card" href="facehard/index.html">
+        <span class="tag">Naval</span>
+        <h2>Naval Ballistics &amp; Armor</h2>
+        <p>Would a battleship's shell get through a warship's armor? Test the deck and side armor of a ship at a chosen range.</p>
+        <span class="open">Open calculator →</span>
+      </a>
+      <div class="links"><a href="facehard/README.md">About this calculator</a></div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Results are estimates from simplified formulas. Treat them as a comparison tool, not a precise prediction.
+</footer>
+</body>
+</html>
