@@ -7,7 +7,7 @@ A set of three small web calculators that estimate how well armor stands up to d
 | Folder | Question it answers | Era and subject |
 |---|---|---|
 | [`apfsds/`](./apfsds) | Can a modern tank round get through a given piece of armor? | Modern tanks and long-rod penetrator rounds |
-| [`armorcalc/`](./armorcalc) | How well does a tank's steel armor resist a given shell? | Tanks from the 1930s to the 1970s |
+| [`armorcal/`](./armorcal) | How well does a tank's steel armor resist a given shell? | Tanks from the 1930s to the 1970s |
 | [`facehard/`](./facehard) | Would a battleship's shell get through a warship's armor? | Naval guns and ship armor |
 
 ## How to use them
